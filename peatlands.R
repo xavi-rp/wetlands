@@ -29,9 +29,11 @@ library(data.table)
 
 
 ## loading data from the survey ####
+## https://www.nature.com/articles/s41467-021-25619-y
 data_survey <- fread(paste0(wd, "/sepla/data_fen-rewetting_denaturated0.1.csv"), header = TRUE)
 
 data_survey
+View(data_survey)
 nrow(data_survey)
 ncol(data_survey)
 names(data_survey)
@@ -54,9 +56,113 @@ summary(data_survey_sps$shannon)
 # 0.0079  1.1274   1.6339   1.5827  2.0770    3.8311     111 
 
 
+sort(unique(data_survey_sps$Cov_peat))
+sort(unique(data_survey_sps$Cov_moss))
+
+sort(unique(data_survey_sps$MgtStatus.simple)) # "grazing/mowing" "no use"  
+
+sort(unique(data_survey$pH_water)) # 
+summary(data_survey$pH_water) #
+# Min.   1st Qu.  Median    Mean   3rd Qu.    Max.    NA's 
+# 5.400   6.380   6.520    6.482   6.670     7.030     616 
+
+sum(!is.na(data_survey$pH_water))  # only 57 points with reported water pH
+                                   # Not sure if water pH is proportional to soil pH??
+# "Bogs and poor fens are acidic and dominated by peat mosses (Sphagnum), 
+#  while rich fens are basic and dominated by true mosses" 
+#  (https://www.sciencedirect.com/topics/agricultural-and-biological-sciences/peatlands)
+
+
+summary(data_survey$BulkDensity) #
 
 
 
 
 
+data_survey_sps_natural <- data_survey_sps[DrainStatus == "natural", ]
+data_survey_sps_natural[, 1:12]
+
+data_survey_sps_rewetted <- data_survey_sps[DrainStatus == "rewetted", ]
+data_survey_sps_rewetted[, 1:12]
+
+
+
+summary(data_survey_sps_natural$shannon)
+summary(data_survey_sps_rewetted$shannon)
+
+mean(data_survey_sps_natural$shannon, na.rm = TRUE)   # 1.738807   Natural, more diverse
+mean(data_survey_sps_rewetted$shannon, na.rm = TRUE)  # 1.464567
+
+sd(data_survey_sps_natural$shannon, na.rm = TRUE)   # 0.6432756
+sd(data_survey_sps_rewetted$shannon, na.rm = TRUE)  # 0.6723645
+
+
+
+## Getting species (natural)
+
+View(data_survey_sps_natural)
+nrow(data_survey_sps_natural)
+ncol(data_survey_sps_natural)
+str(data_survey_sps_natural)
+
+apply(data_survey_sps_natural, 2, unique)
+
+## number of occs per species
+data_survey_sps_natural_ocs <- apply(data_survey_sps_natural[, 13:ncol(data_survey_sps_natural)], 2, function(x) sum(x != 0, na.rm = TRUE))
+head(sort(data_survey_sps_natural_ocs, decreasing = TRUE), 20)
+
+
+
+## Getting species (rewetted)
+## number of occs per species
+data_survey_sps_rewetted_ocs <- apply(data_survey_sps_rewetted[, 13:ncol(data_survey_sps_rewetted)], 2, function(x) sum(x != 0, na.rm = TRUE))
+head(sort(data_survey_sps_rewetted_ocs, decreasing = TRUE), 20)
+
+
+
+## Species appearing only in natural
+length(data_survey_sps_natural_ocs[data_survey_sps_natural_ocs != 0]) 
+length(data_survey_sps_natural_ocs[data_survey_sps_natural_ocs == 0]) 
+
+sps_natural <- data_survey_sps_natural_ocs[data_survey_sps_natural_ocs != 0]
+sps_natural <- names(sps_natural)
+
+sps_rewetted <- data_survey_sps_rewetted_ocs[data_survey_sps_rewetted_ocs != 0]
+sps_rewetted <- names(sps_rewetted)
+
+
+sps_natural[sps_natural %in% sps_rewetted] # 239 sps from Natural also present in Rewetted
+sps_natural_only <- sps_natural[!sps_natural %in% sps_rewetted] # 175 sps are only in Natural
+sps_natural_only
+
+
+## Species likely more strict from peatlands (not found in rewetted)
+sps_natural_only_occs <- data_survey_sps_natural_ocs[names(data_survey_sps_natural_ocs) %in% sps_natural_only]
+sps_natural_only_occs
+
+sps_natural_only_occs <- data.table(species = names(sps_natural_only_occs), num_points = sps_natural_only_occs)
+sps_natural_only_occs
+
+sps_natural_only_occs <- sps_natural_only_occs[order(-rank(num_points))]
+sps_natural_only_occs
+
+summary(sps_natural_only_occs$num_points)
+#   Min.   1st Qu.  Median    Mean    3rd Qu.    Max. 
+#    1.0     1.0     2.0        4.2     5.0    27.0 
+
+quantile(sps_natural_only_occs$num_points, seq(0, 1, 0.1))
+#  0%   10%  20%  30%  40%  50%  60%  70%  80%  90%    100% 
+# 1.0   1.0  1.0  1.0  1.0  2.0  3.0  4.0  6.2  11.0   27.0 
+
+sort(unique(sps_natural_only_occs$num_points))
+
+
+## occurrences of all Sphagnus species
+sps_natural_only_occs[grepl("Sphag", species)]
+
+
+
+
+
+## Number of GBIF occurrences for the 
 
