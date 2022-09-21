@@ -239,6 +239,36 @@ dev.off()
 
 
 
+## Downloading the data form GBIF ####
+
+#sps_natural_only_occs <- fread("sps_natural_only_occs.csv", header = TRUE)
+num_eu_occs_df <- fread("Number_occs_GBIF_EU27.csv", header = TRUE)
+num_eu_occs_df <- na.omit(num_eu_occs_df)
+taxons <- num_eu_occs_df$sp
+taxons <- gsub("\\.", " ", taxons)
+taxons <- gsub("_t", "", taxons)
+
+
+t0 <- Sys.time()
+GetBIF(credentials = paste0(gbif_creds, "/gbif_credentials.RData"),
+       taxon_list = taxons[c(2)],
+       download_format = "SIMPLE_CSV",
+       download_years = c(1990, 2022),
+       download_coords = c(-13, 48, 35, 72), #order: xmin, xmax, ymin, ymax
+       download_coords_accuracy = c(0, 250),
+       rm_dupl = TRUE,
+       cols2keep = c("species", "decimalLatitude", "decimalLongitude", #"elevation",
+                     "gbifID",
+                     "coordinateUncertaintyInMeters",
+                     "countryCode", "year", 
+                     #"institutionCode",	"collectionCode",
+                     #"ownerInstitutionCode",
+                     "datasetKey"),
+       out_name = paste0("sp_records_", format(Sys.Date(), "%Y%m%d")))
+
+Sys.time() - t0
+
+
 
 
 
