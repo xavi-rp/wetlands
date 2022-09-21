@@ -25,10 +25,15 @@ setwd(wd)
 
 
 library(data.table)
+library(PreSPickR)
+library(ggplot2)
+library(viridis)
+
 
 
 
 ## loading data from the survey ####
+
 ## https://www.nature.com/articles/s41467-021-25619-y
 data_survey <- fread(paste0(wd, "/sepla/data_fen-rewetting_denaturated0.1.csv"), header = TRUE)
 
@@ -37,6 +42,10 @@ View(data_survey)
 nrow(data_survey)
 ncol(data_survey)
 names(data_survey)
+
+
+
+## Checking data set ####
 
 ## survey point data and species 
 data_survey_sps <- data_survey[, 1:552] 
@@ -77,7 +86,7 @@ summary(data_survey$BulkDensity) #
 
 
 
-
+## Getting "natural" survey points
 
 data_survey_sps_natural <- data_survey_sps[DrainStatus == "natural", ]
 data_survey_sps_natural[, 1:12]
@@ -146,6 +155,10 @@ sps_natural_only_occs
 sps_natural_only_occs <- sps_natural_only_occs[order(-rank(num_points))]
 sps_natural_only_occs
 
+write.csv(sps_natural_only_occs, file = "sps_natural_only_occs.csv", row.names = FALSE)
+sps_natural_only_occs <- fread("sps_natural_only_occs.csv", header = TRUE)
+
+
 summary(sps_natural_only_occs$num_points)
 #   Min.   1st Qu.  Median    Mean    3rd Qu.    Max. 
 #    1.0     1.0     2.0        4.2     5.0    27.0 
@@ -164,5 +177,73 @@ sps_natural_only_occs[grepl("Sphag", species)]
 
 
 
-## Number of GBIF occurrences for the 
+## Number of GBIF occurrences for the sps found only in "natural" peatlands  ####
+
+sps_natural_only_occs <- fread("sps_natural_only_occs.csv", header = TRUE)
+
+
+countr <- c("BE", "EL", "LT", "PT", "BG", "ES", "LU", "RO", "CZ", "FR", "HU", "SI", "DK", "HR", "MT", "SK", "DE", "IT", "NL", "FI", "EE", "CY", "AT", "SE", "IE", "LV", "PL")
+countr <- sort(countr)
+length(countr)
+
+
+num_eu_occs_df <- c()
+count <- 1
+#sp <- sps_natural_only_occs$species[1]
+
+for(sp in sps_natural_only_occs$species){
+  sp <- gsub("\\.", " ", sp)
+  sp_key <- as.data.frame(name_backbone(name = sp))$usageKey
+  num_eu_occs <- 0
+  if(!is.null(sp_key)){
+    for(c in countr){
+      num_occs <- occ_count(taxonKey = sp_key,
+                            country = c,
+                            from = 1990,
+                            to = 2022)
+      num_eu_occs <- num_eu_occs + num_occs
+    }
+  }else{
+    sp_key <- NA
+    num_eu_occs <- NA
+  }
+  num_eu_occs_df <- rbind(num_eu_occs_df, data.frame(sp, sp_key, num_eu_occs))
+  print(paste0(sp, " - sp ", count, "/", length(sps_natural_only_occs$species), ": ", num_eu_occs))
+  count <- count + 1
+}
+
+
+num_eu_occs_df
+
+write.csv(num_eu_occs_df, "Number_occs_GBIF_EU27.csv", row.names = FALSE)
+num_eu_occs_df <- fread("Number_occs_GBIF_EU27.csv", header = TRUE)
+
+
+
+num_eu_occs_df_1 <- na.omit(num_eu_occs_df)
+num_eu_occs_df_1$sp <- factor(num_eu_occs_df_1$sp, levels = num_eu_occs_df$sp)
+
+
+png("num_occs_GBIF_EU27.png", width = 15, height = 20, units = "cm", res = 150)
+num_eu_occs_df_1 %>%
+  ggplot(aes(x = reorder(sp, desc(sp)), y = num_eu_occs)) + 
+  geom_bar(stat = "identity", fill = viridis(length(num_eu_occs_df_1$sp))) +
+  ggtitle("GBIF occurrences (natural) peatland plants") +
+  labs(x = "Species", y = "Number of Occurrences GBIF (1990-2022)") +
+  #theme(plot.title = element_text(color="red", size=14, face="bold.italic")) +
+  theme(plot.title = element_text(hjust = 0.3, size = 12, face = "bold"),
+        axis.text = element_text(size = 4),
+        axis.title = element_text(size = 8)) +
+  coord_flip()
+dev.off()
+
+
+
+
+
+
+
+
+
+
 
