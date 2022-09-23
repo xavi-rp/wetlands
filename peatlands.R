@@ -52,6 +52,8 @@ data_survey_sps <- data_survey[, 1:552]
 #data_survey_kk <- data_survey[, c(1:12, 553:560)] # don't know what's "Maximum", "Minimum", "Amplitude"
 
 data_survey_sps[, 1:12]
+sort(unique(data_survey_sps[, 1:12]$Year))
+sort(unique(data_survey_sps[, 1:12]$YearRestoration))
 
 sum(is.na(data_survey_sps$shannon))
 View(data_survey_sps[is.na(data_survey_sps$shannon), 1:12]) # not all 111 NAs in "shannon" are rewetted or natural
@@ -158,6 +160,9 @@ sps_natural_only_occs
 write.csv(sps_natural_only_occs, file = "sps_natural_only_occs.csv", row.names = FALSE)
 sps_natural_only_occs <- fread("sps_natural_only_occs.csv", header = TRUE)
 
+## Hamatocaulis vernicosus is the accepted name
+sps_natural_only_occs$species <- gsub("Drepanocladus.vernicosus", "Hamatocaulis.vernicosus", sps_natural_only_occs$species)
+
 
 summary(sps_natural_only_occs$num_points)
 #   Min.   1st Qu.  Median    Mean    3rd Qu.    Max. 
@@ -239,7 +244,7 @@ dev.off()
 
 
 
-## Downloading the data form GBIF ####
+## Downloading data form GBIF ####
 
 #sps_natural_only_occs <- fread("sps_natural_only_occs.csv", header = TRUE)
 num_eu_occs_df <- fread("Number_occs_GBIF_EU27.csv", header = TRUE)
@@ -249,9 +254,9 @@ taxons <- gsub("\\.", " ", taxons)
 taxons <- gsub("_t", "", taxons)
 
 
-t0 <- Sys.time()
 GetBIF(credentials = paste0(gbif_creds, "/gbif_credentials.RData"),
-       taxon_list = taxons[c(2)],
+       taxon_list = taxons,
+       #taxon_list = s,
        download_format = "SIMPLE_CSV",
        download_years = c(1990, 2022),
        download_coords = c(-13, 48, 35, 72), #order: xmin, xmax, ymin, ymax
@@ -266,7 +271,194 @@ GetBIF(credentials = paste0(gbif_creds, "/gbif_credentials.RData"),
                      "datasetKey"),
        out_name = paste0("sp_records_", format(Sys.Date(), "%Y%m%d")))
 
-Sys.time() - t0
+
+
+## if GetBIF didn't manage to create/write out the data frame with presences:
+taxon_dir <- getwd()
+#taxons <- taxons$sp
+
+data1 <- Prep_BIF(taxon_dir = paste0(taxon_dir, "/"),
+                  taxons = taxons,
+                  cols2keep = c("species", "decimalLatitude", "decimalLongitude", #"elevation",
+                                "gbifID",
+                                "coordinateUncertaintyInMeters",
+                                "countryCode", 
+                                "eventDate", "day", "month",
+                                "year", 
+                                #"institutionCode",	"collectionCode",
+                                #"ownerInstitutionCode",
+                                "datasetKey"
+                  ),
+                  #cols2keep = "all",
+                  rm_dupl = TRUE)
+
+head(data1)
+nrow(data1)
+unique(data1$species)
+sort(unique(data1$year))
+
+if(length(unique(data1$species)) != length(unique(data1$sp2))){
+  data1_kk <- data1
+  print("Check the error in 'sp2'!!!")
+  data.table(unique(data1$species), unique(data1$sp2))
+  
+  dt2fix_sp2 <- data1[, .SD, .SDcols = c("species", "sp2")]
+  dt2fix_sp2 <- dt2fix_sp2[!duplicated(dt2fix_sp2$species), ]
+  length(unique(dt2fix_sp2$species))
+  length(unique(dt2fix_sp2$sp2))
+  
+  dt2fix_sp2 <- dt2fix_sp2[duplicated(dt2fix_sp2$sp2), ]
+  setkeyv(dt2fix_sp2, "sp2")
+  
+  dt2fix_sp2
+  
+  for(s in unique(dt2fix_sp2$sp2)){
+    dt2fix_sp2_1  <- unique(data1[sp2 %in% s]$species)
+    for(s1 in (1:length(dt2fix_sp2_1))){
+      #data1[species %in% dt2fix_sp2_1[s1]]$sp2 <- gsub('.{7}$', " ", data1[species %in% dt2fix_sp2_1[s1]]$sp2)
+    }
+    
+  }
+
+  
+  
+} 
+
+
+head(sort(table(data1$species), decreasing = TRUE), 10)
+sp_more_occs_10 <- names(head(sort(table(data1$species), decreasing = TRUE), 10))
+
+
+data_sp_year <- data1[, .SD, .SDcols = c("species", "year")] %>% group_by(species) %>% table
+data_sp_year
+sort(apply(data_sp_year, 2, sum))  # in 1990s there are less occurrences (aggregated species)
+
+
+## Saving data set
+print(paste0("Saving GBIF data as ", "/sp_records_20220922", ".csv"))
+write.csv(data1, file = paste0("sp_records_20220922", ".csv"),
+          quote = FALSE, row.names = FALSE)
+
+
+data <- fread(paste0("sp_records_20220922", ".csv"), header = TRUE)
+data
+
+
+## Citing information
+load("download_info_Epipactis palustris.RData", verbose = TRUE)
+citation_02
+
+
+
+
+
+## ggplot maps ####
+
+data1
+
+library(sf)
+library(ggplot2)
+library(ggExtra)
+library(viridis)  
+# https://cran.r-project.org/web/packages/viridis/vignettes/intro-to-viridis.html
+# The “viridis” and “magma” scales do better - they cover a wide perceptual range in brightness in brightness and blue-yellow, 
+# and do not rely as much on red-green contrast
+library(ggforce)
+library(ggpubr)
+library(patchwork)
+library(giscoR)
+library(dplyr)
+
+#data1_sf <- st_as_sf(data1, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+#data1_sf
+
+
+## Plotting the 4 species most reported in the survey
+sps_4 <- sps_natural_only_occs$species[5:8]
+sps_4 <- gsub("\\.", " ", sps_4)
+sps_4 <- gsub("_t", "", sps_4)
+sps_4
+
+data1_sps <- data1[species %in% sps_4, ]
+data1_sps
+
+table(data1_sps$species)
+
+
+## Gisco maps
+# https://ropengov.github.io/giscoR/
+
+eur_gisco <- gisco_get_countries(region = "Europe")
+eur_gisco
+
+eur_gisco <- st_crop(eur_gisco, xmin = -10.5, xmax = 50, ymin = 33, ymax = 72)
+
+
+## All 4 species together
+
+p <- ggplot() +
+  geom_sf(data = eur_gisco) +
+  geom_point(
+    data = data1_sps, 
+    #data = data1[data1$species == "Eriophorum vaginatum", ], 
+    aes(x = decimalLongitude, y = decimalLatitude, 
+        color = species),
+    size = 0.1
+  ) +
+  
+  theme_light() +
+  scale_color_viridis(option = "viridis", discrete = TRUE) +
+  labs(title = "GBIF occurrences 2000-2021") + #, x = "TY [°C]", y = "Txxx") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom",
+        legend.title = element_text(size = 16)) +
+  guides(color = guide_legend("Species", override.aes = list(size = 2)))
+
+# https://jtr13.github.io/cc21fall2/tutorial-for-scatter-plot-with-marginal-distribution.html
+p1 <- ggMarginal(p,
+                 aes(colour = species),
+                 type = "density", 
+                 #type = "histogram", 
+                 #type = "densigram", 
+                 groupColour = TRUE, groupFill = TRUE)
+p1
+
+
+## 4 species separatedly
+
+p2 <- ggplot() +
+  geom_sf(data = eur_gisco) +
+  geom_point(
+    data = data1_sps, 
+    aes(x = decimalLongitude, y = decimalLatitude, 
+        color = species),
+    size = 0.01
+  ) +
+  #facet_zoom(x = decimalLongitude < 2)+
+  #facet_zoom(x = species == "Eriophorum vaginatum ")+
+  facet_wrap(~ species, ncol = 2) + 
+  theme_light() +
+  scale_color_viridis(option = "viridis", discrete = TRUE) +
+  labs(title = "GBIF occurrences 2000-2021") + #, x = "TY [°C]", y = "Txxx") +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom",
+        legend.title = element_text(size = 16)) +
+  guides(color = guide_legend("Species", override.aes = list(size = 2)))
+
+
+list(p1, p2) %>%         # https://stackoverflow.com/questions/72442442/properly-size-multiple-ggextraplot-objects-after-calling-ggmarginal-in-r
+  wrap_plots(nrow = 1, widths = c(2, 1.5))
+
+
+
+ggsave("GBIF_occurrences_4sps.png")#, width = 20, height = 20, units = "cm")
+
+
+
+
+
+
+## Peatlands map ####
 
 
 
@@ -275,5 +467,4 @@ Sys.time() - t0
 
 
 
-
-
+  
