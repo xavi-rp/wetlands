@@ -25,10 +25,11 @@ setwd(wd)
 
 
 library(data.table)
-library(PreSPickR)
+#library(PreSPickR)
 library(ggplot2)
 library(viridis)
-
+library(raster)
+library(sf)
 
 
 
@@ -459,6 +460,39 @@ ggsave("GBIF_occurrences_4sps.png")#, width = 20, height = 20, units = "cm")
 
 
 ## Peatlands map ####
+## Tanneberger et al., 2017. DOI: 10.19189/MaP.2016.OMB.264
+
+library(raster)
+#library(terra)
+library(rasterVis)
+library(viridis)
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+
+
+#peatl_map <- rast(paste0("sepla/peatlands_map/tanneberger/", "EMB_peatl_int150m_WGS84.tif")) 
+peatl_map <- raster(paste0("sepla/peatlands_map/tanneberger/", "EMB_peatl_int150m_WGS84.tif")) 
+peatl_map
+str(peatl_map)
+
+peatl_map_pts <- rasterToPoints(peatl_map, spatial = TRUE)
+head(peatl_map_pts)
+
+peatl_map_df <- data.frame(peatl_map_pts)
+head(peatl_map_df)
+nrow(peatl_map_df)
+
+
+peatl_map_df_1 <- peatl_map_df %>% mutate(across(c(x, y), round, digits = 4))
+head(peatl_map_df_1)
+
+
+jpeg("/eos/jeodpp/home/users/rotllxa/wetlands/peatl_map.jpg")
+ggplot() +
+  geom_raster(data = peatl_map_df_1, aes(x, y, fill = OID))
+
+dev.off()
 
 
 
@@ -467,4 +501,158 @@ ggsave("GBIF_occurrences_4sps.png")#, width = 20, height = 20, units = "cm")
 
 
 
-  
+
+
+
+
+
+
+## Number of GBIF occurrences for the genus Sphagnum  ####
+
+countr <- c("BE", "EL", "LT", "PT", "BG", "ES", "LU", "RO", "CZ", "FR", "HU", "SI", "DK", "HR", "MT", "SK", "DE", "IT", "NL", "FI", "EE", "CY", "AT", "SE", "IE", "LV", "PL")
+countr <- sort(countr)
+length(countr)
+
+
+num_eu_occs_df <- c()
+count <- 1
+#sp <- sps_natural_only_occs$species[1]
+
+for(sp in "Sphagnum"){
+  sp <- gsub("\\.", " ", sp)
+  sp_key <- as.data.frame(name_backbone(name = sp))$usageKey
+  num_eu_occs <- 0
+  if(!is.null(sp_key)){
+    for(c in countr){
+      num_occs <- occ_count(taxonKey = sp_key,
+                            country = c,
+                            georeferenced = TRUE,
+                            from = 1990,
+                            to = 2022)
+      num_eu_occs <- num_eu_occs + num_occs
+    }
+  }else{
+    sp_key <- NA
+    num_eu_occs <- NA
+  }
+  num_eu_occs_df <- rbind(num_eu_occs_df, data.frame(sp, sp_key, num_eu_occs))
+  print(paste0(sp, " - sp ", count, "/", length(sps_natural_only_occs$species), ": ", num_eu_occs))
+  count <- count + 1
+}
+
+
+num_eu_occs_df
+
+
+
+
+
+
+
+
+## GBIF occurrences for peatlands plants ####
+
+# The data set has been downloaded from by Carolina Puerta-Pinero on 28/11/2022
+
+
+gbif_data_dir <- "/eos/jeodpp/home/users/puercar/Peatlands/"
+
+if(!dir.exists(paste0(getwd(), "/gbif_occs_carolina/"))) dir.create(paste0(getwd(), "/gbif_occs_carolina/"))
+
+#unzip(paste0(gbif_data_dir, "/0177592-220831081235567.zip"), exdir = paste0(getwd(), "/gbif_occs_carolina/")) 
+# This extraction needs to be done manually, as the process in R gets truncated at 4GB
+
+gbif_data_all <- fread(paste0(getwd(), "/gbif_occs_carolina/0177592-220831081235567.csv"), header = TRUE)
+
+nrow(gbif_data_all)   # 58481926
+names(gbif_data_all)
+
+length(unique(gbif_data_all$species))   # 25674
+sort(unique(gbif_data_all$year))        # 1980-2022
+sort(unique(gbif_data_all$countryCode)) # several errors (e.g. US)
+sum(is.na(gbif_data_all$countryCode)) #  0
+range(gbif_data_all$coordinateUncertaintyInMeters) #  0.01 350.00
+
+
+gbif_data_all_clean <- gbif_data_all[, .SD, .SDcols = c("family", "genus", "species", 
+                                                        "decimalLongitude", "decimalLatitude",
+                                                        "gbifID", 
+                                                        "countryCode", 
+                                                        "coordinateUncertaintyInMeters",
+                                                        "year")]
+
+gbif_data_all_clean <- gbif_data_all_clean[year %in% c(2000:2022), ]
+nrow(gbif_data_all_clean)  # 48192359
+gbif_data_all_clean <- gbif_data_all_clean[coordinateUncertaintyInMeters %in% c(0:150), ]
+nrow(gbif_data_all_clean)  # 38582406
+
+setnames(gbif_data_all_clean, c("decimalLongitude", "decimalLatitude"), c("x", "y"))
+gbif_data_all_clean
+sort(unique(gbif_data_all_clean$countryCode))
+
+write.csv(gbif_data_all_clean, file = "gbif_data_all_clean.csv", quote = FALSE, row.names = FALSE)
+
+#gbif_data_all <- gbif_data_all_clean
+gc()
+
+
+### Extracting occs in peatlands ####
+
+## Peatlands map (Tanneberger)
+peatl_map <- raster(paste0("sepla/peatlands_map/tanneberger/", "EMB_peatl_int150m_WGS84.tif")) 
+
+##cat_coords <-  c(3500000, 3800000, 1900000, 2300000)   # Catalonia (LAEA, m) (xmin, xmax, ymin, ymax)
+#cat_coords <-  c(-0.5, 3.5, 42, 44)   # North Catalonia (WGS84) (xmin, xmax, ymin, ymax)
+#peatl_map_cat <- crop(peatl_map, extent(cat_coords))
+#peatl_map_cat
+#plot(peatl_map_cat)
+
+
+
+gbif_data_all_sf <- st_as_sf(as.data.frame(gbif_data_all_clean), coords = c("x", "y"), crs = 4326)#, agr = "constant")
+gbif_data_all_sf
+
+t0 <- Sys.time()
+occs_peatl_map <- as.data.table(extract(peatl_map,
+                                        #peatl_map_cat,
+                                        gbif_data_all_sf, 
+                                        sp = TRUE))
+occs_peatl_map  
+Sys.time() - t0
+
+
+write.csv(occs_peatl_map, "occs_peatl_map.csv", row.names = FALSE, quote = FALSE)
+
+
+unique(occs_peatl_map$EMB_peatl_int150m_WGS84)
+sum(occs_peatl_map$EMB_peatl_int150m_WGS84, na.rm = TRUE)  # 32604
+
+occs_peatl_map <- occs_peatl_map[EMB_peatl_int150m_WGS84 == 1, ]
+setkeyv(occs_peatl_map, "species")
+occs_peatl_map  
+
+sum(occs_peatl_map$species == "")   # 1037 with no species name
+
+occs_peatl_map <- occs_peatl_map[!occs_peatl_map$species == "", ]
+nrow(occs_peatl_map)  # 31567
+
+sort(unique(occs_peatl_map$year))
+table(occs_peatl_map$year)
+table(occs_peatl_map$species)
+
+
+# Ranking of more common species
+occs_peatl_map_species_rank <- as.data.table(table(occs_peatl_map$species))[order(N, decreasing = TRUE)]
+occs_peatl_map_species_rank
+head(occs_peatl_map_species_rank, 30)
+
+
+# Entire list of species
+occs_peatl_map_species <- occs_peatl_map[!duplicated(species), .SD, .SDcols = c("family", "genus", "species")]
+setkeyv(occs_peatl_map_species, "species")
+occs_peatl_map_species
+nrow(occs_peatl_map_species)                 # 1832 species
+sort(unique(occs_peatl_map_species$family))  # 155 families
+
+
+
