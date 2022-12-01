@@ -176,7 +176,7 @@ quantile(sps_natural_only_occs$num_points, seq(0, 1, 0.1))
 sort(unique(sps_natural_only_occs$num_points))
 
 
-## occurrences of all Sphagnus species
+## occurrences of all Sphagnus species appearing only in natural peatlands (not-rewetted)
 sps_natural_only_occs[grepl("Sphag", species)]
 
 
@@ -625,16 +625,16 @@ write.csv(occs_peatl_map, "occs_peatl_map.csv", row.names = FALSE, quote = FALSE
 
 
 unique(occs_peatl_map$EMB_peatl_int150m_WGS84)
-sum(occs_peatl_map$EMB_peatl_int150m_WGS84, na.rm = TRUE)  # 32604
+sum(occs_peatl_map$EMB_peatl_int150m_WGS84, na.rm = TRUE)  # 3672825
 
 occs_peatl_map <- occs_peatl_map[EMB_peatl_int150m_WGS84 == 1, ]
 setkeyv(occs_peatl_map, "species")
 occs_peatl_map  
 
-sum(occs_peatl_map$species == "")   # 1037 with no species name
+sum(occs_peatl_map$species == "")   # 190884 with no species name
 
 occs_peatl_map <- occs_peatl_map[!occs_peatl_map$species == "", ]
-nrow(occs_peatl_map)  # 31567
+nrow(occs_peatl_map)  # 3481941
 
 sort(unique(occs_peatl_map$year))
 table(occs_peatl_map$year)
@@ -645,14 +645,63 @@ table(occs_peatl_map$species)
 occs_peatl_map_species_rank <- as.data.table(table(occs_peatl_map$species))[order(N, decreasing = TRUE)]
 occs_peatl_map_species_rank
 head(occs_peatl_map_species_rank, 30)
+View(occs_peatl_map_species_rank)
+
+
+
+# Checking by country
+table(occs_peatl_map[species == "Festuca rubra", countryCode])
+table(occs_peatl_map[species == "Festuca rubra", countryCode], occs_peatl_map[species == "Festuca rubra", year])
+
+table(occs_peatl_map[species == "Phragmites australis", countryCode])
+table(occs_peatl_map[species == "Phragmites australis", countryCode], occs_peatl_map[species == "Phragmites australis", year])
 
 
 # Entire list of species
 occs_peatl_map_species <- occs_peatl_map[!duplicated(species), .SD, .SDcols = c("family", "genus", "species")]
 setkeyv(occs_peatl_map_species, "species")
 occs_peatl_map_species
-nrow(occs_peatl_map_species)                 # 1832 species
-sort(unique(occs_peatl_map_species$family))  # 155 families
+nrow(occs_peatl_map_species)                 # 8111 species
+sort(unique(occs_peatl_map_species$family))  # 409 families
+
+
+# Sphagnum 
+sphagnum_occs <- occs_peatl_map[grepl("Sphag", species), ]
+
+length(unique(sphagnum_occs$species))  # 56 species
+sphagnum_occs                          # 53311 occurrences of all species
+
+sort(table(sphagnum_occs$species), decreasing = TRUE)  # species rarity (occs/species)
+
+table(sphagnum_occs$species, sphagnum_occs$countryCode) # occs/species/country
+
+
+
+## comparing with species found only in natural peatlands reported in the survey
+sps_natural_only_occs  # from the survey (175)
+
+occs_peatl_map_species$species   # from GBIF + peatlands map
+
+
+sps_natural_only_occs_species <- sps_natural_only_occs$species
+sps_natural_only_occs_species <- gsub("\\.", " ", sps_natural_only_occs_species)
+sps_natural_only_occs_species <- gsub(" agg ", "", sps_natural_only_occs_species)
+sps_natural_only_occs_species <- gsub("_t", "", sps_natural_only_occs_species)
+sps_natural_only_occs_species <- gsub("_h", "", sps_natural_only_occs_species)
+
+
+occs_peatl_map_species_species <- occs_peatl_map_species$species  # 8111 species
+length(occs_peatl_map_species_species)
+
+occs_peatl_map_species_species[occs_peatl_map_species_species %in% sps_natural_only_occs_species] # 135 species (out of 175 from the survey)
+
+
+
+
+
+
+
+
 
 
 
