@@ -3,7 +3,7 @@ if(Sys.info()[4] == "D01RI1700308") {
   wd <- ""
 }else if(Sys.info()[4] == "S-JRCIPRAP320P") {
   wd <- ""
-}else if(Sys.info()[4] %in% c("jeodpp-terminal-jd001-03", "jeodpp-terminal-03")) {
+}else if(Sys.info()[4] %in% c("jeodpp-terminal-jd001-03", "jeodpp-terminal-03", "jeodpp-terminal-dev-12" )) {
   if(!dir.exists("/eos/jeodpp/home/users/rotllxa/wetlands")) 
     dir.create("/eos/jeodpp/home/users/rotllxa/wetlands")
   wd <- "/eos/jeodpp/home/users/rotllxa/wetlands"
@@ -702,6 +702,69 @@ occs_peatl_map_species_species[occs_peatl_map_species_species %in% sps_natural_o
 
 
 
+## Tanneberger vs CorineLC ####
+
+## CLC at 100m
+clc_100 <- raster::stack("/eos/jeodpp/data/base/Landcover/EUROPE/CorineLandCover/CLC2018/VER20-b2/Data/GeoTIFF/100m/clc2018_Version_20_b2.tif")
+clc_100
+
+## Peatlands map
+peatl_map <- raster::raster(paste0("sepla/peatlands_map/tanneberger/", "EMB_peatl_int150m_WGS84.tif")) 
+peatl_map
+
+## Peatlands map centroids
+# rasterToPoints calculates the centroid. See example: https://www.rdocumentation.org/packages/raster/versions/3.5-15/topics/rasterToPoints
+peatl_map_pts <- rasterToPoints(peatl_map, fun = function(x){x == 1}, spatial = TRUE)
+peatl_map_pts
+head(peatl_map_pts)
+
+# To LAEA
+peatl_map_pts_laea <- spTransform(peatl_map_pts, CRS("+init=EPSG:3035"))
+peatl_map_pts_laea
 
 
+## Extracting values
+peatl_map_CLC <- as.data.table(raster::extract(clc_100,
+                                       peatl_map_pts_laea, 
+                                       sp = TRUE))
+peatl_map_CLC
+unique(peatl_map_CLC$OID)
+sort(unique(peatl_map_CLC$layer))
+sum(is.na(peatl_map_CLC$layer))
+sum(!is.na(peatl_map_CLC$layer))
+
+sort(table(peatl_map_CLC$layer))
+
+peatl_map_CLC_clean <- peatl_map_CLC[!is.na(layer), ]
+peatl_map_CLC_clean
+
+peatl_map_CLC_clean <- peatl_map_CLC_clean[layer != 999, ]
+peatl_map_CLC_clean
+
+sort(table(peatl_map_CLC_clean$layer))
+
+sort(unique(peatl_map_CLC_clean$layer))
+
+
+## barplot
+peatl_map_CLC_clean$layer <- as.factor(peatl_map_CLC_clean$layer)
+
+png("PeatlandsMap_CLC_allClasses.png", width = 20, height = 10, units = "cm", res = 150)
+ggplot(peatl_map_CLC_clean, 
+       aes(x = layer, fill = layer)) + 
+  geom_bar(fill = viridis(length(unique(peatl_map_CLC_clean$layer)))) +
+  #geom_histogram() +
+  #coord_flip()
+  theme(axis.text.x = element_text(angle = 90,
+                                   #, size = 5
+                                   vjust=-0.5
+                                   )) +
+  labs(#title = "MAIN TITLE", 
+       x = "CLC class"#, 
+       #y = "Y-AXIS TITLE"
+       )
+dev.off()
+
+
+## barplot for 
 
